@@ -1,0 +1,33 @@
+parameters:
+  container_name:
+  container_key:
+  variable_group_name:
+
+stages:
+  - stage: validate
+    variables:
+      tf_plan_name: tfplan
+      working_directory: azure
+    condition: or(startsWith(variables['Build.SourceBranch'], 'refs/pull'), startsWith(variables['Build.SourceBranch'], 'refs/heads/feature'))
+    jobs:
+      - template: validate.yml
+        parameters:
+          container_name: ${{ parameters.container_name }}
+          container_key: ${{ parameters.container_key }}
+          variable_group_name: ${{ parameters.variable_group_name }}
+          tf_plan_name: $(tf_plan_name)
+          working_directory: $(working_directory)
+
+  - stage: deploy
+    condition: and(not(startsWith(variables['Build.SourceBranch'], 'refs/pull')), not(startsWith(variables['Build.SourceBranch'], 'refs/heads/feature')))
+    variables:
+      tf_plan_name: tfplan
+      working_directory: azure
+    jobs:
+      - template: deploy.yml
+        parameters:
+          container_name: ${{ parameters.container_name }}
+          container_key: ${{ parameters.container_key }}
+          variable_group_name: ${{ parameters.variable_group_name }}
+          tf_plan_name: $(tf_plan_name)
+          working_directory: $(working_directory)

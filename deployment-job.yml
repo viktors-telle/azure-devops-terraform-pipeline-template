@@ -1,0 +1,38 @@
+parameters:
+  container_name:
+  container_key:
+  variable_group_name:
+  environment:
+  tf_plan_name:
+  working_directory:
+
+steps:
+  - checkout: self
+  - task: qetza.replacetokens.replacetokens-task.replacetokens@3
+    inputs:
+      targetFiles: "${{ parameters.working_directory }}/environments/${{ parameters.environment }}/*.tfvars => outputs/*.tfvars"
+      encoding: "auto"
+      writeBOM: true
+      actionOnMissing: "warn"
+      keepToken: false
+      tokenPrefix: "#{"
+      tokenSuffix: "}"
+  - bash: |
+      terraform init -backend-config="storage_account_name=$(terraform-state-storage-account-name)" -backend-config="container_name=${{ parameters.container_name }}" -backend-config="key=${{ format('{0}-{1}', parameters.environment, parameters.container_key) }}" -backend-config="access_key=$(terraform-state-access-key)" -input=false
+    displayName: Initialize configuration
+    workingDirectory: ${{ parameters.working_directory }}
+
+  - bash: terraform validate
+    displayName: Validate configuration
+    workingDirectory: ${{ parameters.working_directory }}
+
+  - bash: |
+      terraform plan -var-file="environments/${{ parameters.environment }}/outputs/variables.tfvars" -var "azure_client_secret=$(azure-client-secret)" -input=false -detailed-exitcode -out=${{ parameters.tf_plan_name }}
+      echo "##vso[task.setvariable variable=has_changes]$?"
+    displayName: Create execution plan
+    workingDirectory: ${{ parameters.working_directory }}
+
+  - bash: terraform apply -input=false -auto-approve ${{ parameters.tf_plan_name }}
+    displayName: Apply execution plan
+    condition: eq(variables.has_changes, '2')
+    workingDirectory: ${{ parameters.working_directory }}

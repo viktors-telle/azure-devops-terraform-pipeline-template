@@ -1,0 +1,40 @@
+parameters:
+  container_name:
+  container_key:
+  variable_group_name:
+
+jobs:
+  - job: Validate
+    variables:
+      - name: tf_plan_name
+        value: tfplan
+      - name: environment
+        value: dev
+      - name: working_directory
+        value: azure
+      - group: ${{ format('terraform-{0}', variables.environment) }}
+      - ${{ if ne(parameters.variable_group_name, '') }}:
+          - group: ${{ format('{0}-{1}', parameters.variable_group_name, variables.environment) }}
+    steps:
+      - task: qetza.replacetokens.replacetokens-task.replacetokens@3
+        inputs:
+          targetFiles: "$(working_directory)/environments/$(environment)/*.tfvars => outputs/*.tfvars"
+          encoding: "auto"
+          writeBOM: true
+          actionOnMissing: "warn"
+          keepToken: false
+          tokenPrefix: "#{"
+          tokenSuffix: "}"
+      - bash: |
+          terraform init -backend-config="storage_account_name=$(terraform-state-storage-account-name)" -backend-config="container_name=${{ parameters.container_name }}" -backend-config="key=${{ format('{0}-{1}', variables.environment, parameters.container_key) }}" -backend-config="access_key=$(terraform-state-access-key)" -input=false
+        displayName: Initialize configuration
+        workingDirectory: $(working_directory)
+
+      - bash: terraform validate
+        displayName: Validate configuration
+        workingDirectory: $(working_directory)
+
+      - bash: |
+          terraform plan -var-file="environments/$(environment)/outputs/variables.tfvars" -var "azure_client_secret=$(azure-client-secret)" -input=false
+        displayName: Create execution plan
+        workingDirectory: $(working_directory)

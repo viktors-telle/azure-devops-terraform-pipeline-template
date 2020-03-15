@@ -1,0 +1,76 @@
+parameters:
+  container_name:
+  container_key:
+  variable_group_name:
+  tf_plan_name:
+  working_directory:
+
+jobs:
+  - deployment: dev
+    condition: startsWith(variables['Build.SourceBranch'], 'refs/heads/dev')
+    displayName: Deploy to dev
+    environment: dev
+    variables:
+      - name: environment
+        value: dev
+      - group: ${{ format('terraform-{0}', variables.environment) }}
+      - ${{ if ne(parameters.variable_group_name, '') }}:
+          - group: ${{ format('{0}-{1}', parameters.variable_group_name, variables.environment) }}
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+            - template: deployment-job.yml
+              parameters:
+                container_name: ${{ parameters.container_name }}
+                container_key: ${{ parameters.container_key }}
+                variable_group_name: ${{ parameters.variable_group_name }}
+                environment: $(environment)
+                tf_plan_name: ${{ parameters.tf_plan_name }}
+                working_directory: ${{ parameters.working_directory }}
+
+  - deployment: stage
+    condition: startsWith(variables['Build.SourceBranch'], 'refs/heads/rel')
+    displayName: Deploy to stage
+    environment: stage
+    variables:
+      - name: environment
+        value: stage
+      - group: ${{ format('terraform-{0}', variables.environment) }}
+      - ${{ if ne(parameters.variable_group_name, '') }}:
+          - group: ${{ format('{0}-{1}', parameters.variable_group_name, variables.environment) }}
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+            - template: deployment-job.yml
+              parameters:
+                container_name: ${{ parameters.container_name }}
+                container_key: ${{ parameters.container_key }}
+                variable_group_name: ${{ parameters.variable_group_name }}
+                environment: $(environment)
+                tf_plan_name: ${{ parameters.tf_plan_name }}
+                working_directory: ${{ parameters.working_directory }}
+
+  - deployment: prod
+    condition: and(succeeded('stage'), eq(variables['Build.SourceBranchName'], 'refs/heads/master'))
+    displayName: Deploy to prod
+    environment: prod
+    variables:
+      - name: environment
+        value: prod
+      - group: ${{ format('terraform-{0}', variables.environment) }}
+      - ${{ if ne(parameters.variable_group_name, '') }}:
+          - group: ${{ format('{0}-{1}', parameters.variable_group_name, variables.environment) }}
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+            - template: deployment-job.yml
+              parameters:
+                container_name: ${{ parameters.container_name }}
+                container_key: ${{ parameters.container_key }}
+                variable_group_name: ${{ parameters.variable_group_name }}
+                environment: $(environment)
+                tf_plan_name: ${{ parameters.tf_plan_name }}
+                working_directory: ${{ parameters.working_directory }}
